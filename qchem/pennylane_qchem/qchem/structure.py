@@ -1319,8 +1319,44 @@ def second_derivative_energy(H, x, i, j, ansatz, params, dev, hessian, delta=0.0
         :math:`\frac{\partial^2 E(\theta^*(x), x)}{\partial x_i \partial x_j}` of the total
         energy
 
-    **Example**
-    
+    .. UsageDetails::
+
+        An example of how to use this function is shown below:
+
+        .. code-block:: python
+
+            import pennylane as qml
+            from pennylane import numpy as np
+            
+            # parametrized hamiltonian H(x) of the hydrogen molecule
+            def H(x):
+                return qml.qchem.molecular_hamiltonian(["H", "H"], x)[0]
+
+            # nuclear coordinates
+            x = np.array([ 0., 0., -0.332568, 0., 0., -1.067432])
+
+            # device
+            dev = qml.device('default.qubit', wires=4)
+
+            # quantum circuit
+            def circuit(params, wires):
+                qml.BasisState(np.array([1, 1, 0, 0]), wires=[0, 1, 2, 3])
+                qml.Rot(*params, wires=2)
+                qml.CNOT(wires=[2, 3])
+                qml.CNOT(wires=[2, 0])
+                qml.CNOT(wires=[3, 1])
+
+            # circuit parameters
+            params = np.random.normal(0, np.pi, 3)
+
+            # function to compute E(x)
+            energy = qml.ExpvalCost(circuit, H(x), dev)
+
+            # Hessian of the quantum circuit
+            hessian = qml.jacobian(qml.grad(energy, argnum=0))(params)
+
+            # compute the second-order derivative of E(x)
+            deriv = qml.qchem.second_derivative_energy(H, x, 0, 2, circuit, params, dev, hessian)
     """
 
     if not callable(H):
@@ -1333,18 +1369,18 @@ def second_derivative_energy(H, x, i, j, ansatz, params, dev, hessian, delta=0.0
         raise TypeError(error_message)
 
     # \nabla_\theta dE/dxj
-    dE_j = qml.ExpvalCost(ansatz, derivative(x, H, j, delta=delta), dev)
-    grad_dE_j = np.array(qml.grad(dE_j)(params))
+    dE_j = qml.ExpvalCost(ansatz, derivative(H, x, j, delta=delta), dev)
+    grad_dE_j = np.array(qml.grad(dE_j)(params)[0])
 
     # \nabla_\theta dE/dxi
-    dE_i = qml.ExpvalCost(ansatz, derivative(x, H, i, delta=delta), dev)
-    grad_dE_i = np.array(qml.grad(dE_i)(params))
+    dE_i = qml.ExpvalCost(ansatz, derivative(H, x, i, delta=delta), dev)
+    grad_dE_i = np.array(qml.grad(dE_i)(params)[0])
 
     # solve linear system of equations to find 'dtheta(x)/dxi'
     dtheta_i = np.linalg.solve(hessian, -grad_dE_i)
 
     # compute '<d2H/dxidxj>'
-    expval_d2H_ij = qml.ExpvalCost(ansatz, second_derivative(x, H, i, j, delta=delta), dev)(params)
+    expval_d2H_ij = qml.ExpvalCost(ansatz, second_derivative(H, x, i, j, delta=delta), dev)(params)
 
     return np.dot(dtheta_i, grad_dE_j) + expval_d2H_ij
 
@@ -1362,6 +1398,7 @@ __all__ = [
     "derivative",
     "gradient",
     "second_derivative",
+    "second_derivative_energy",
     "_qubit_operator_to_terms",
     "_terms_to_qubit_operator",
     "_qubit_operators_equivalent",
