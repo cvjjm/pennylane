@@ -29,6 +29,7 @@ __all__ = [
     "derivative",
     "gradient",
     "second_derivative",
+    "second_derivative_energy",
     "_qubit_operator_to_terms",
     "_terms_to_qubit_operator",
     "_qubit_operators_equivalent",
