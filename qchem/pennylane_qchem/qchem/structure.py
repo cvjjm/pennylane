@@ -1266,6 +1266,89 @@ def second_derivative(H, x, i, j, delta=0.00529):
         return (H(x_pp) - H(x_mp) - H(x_pm) + H(x_mm)) * (delta * to_bohr) ** -2
 
 
+def second_derivative_energy(H, x, i, j, ansatz, params, dev, hessian, delta=0.00529):
+    r"""Computes the second-order derivative
+    :math:`\frac{\partial^2 E(\theta^*(x), x)}{\partial x_i \partial x_j}` of the total energy
+    evaluated at the nuclear coordinates :math:`x`.
+
+    The expression to evaluate the second derivative of the energy is given by
+    (`arXiv:1905.04054 <https://arxiv.org/abs/1905.04054>`_):
+
+    .. math::
+
+        \frac{\partial^2 E(\theta^*(x))}{\partial x_i \partial x_j} = \sum_a
+        \frac{\partial \theta^*_a(x)}{\partial x_i} \frac{\partial}{\partial \theta_a}
+        \frac{\partial E({\theta}^*(x), x)}{\partial x_j} + \langle \Psi(\theta^*(x)) \vert
+        \frac{\partial^2 \hat{H}(x)}{\partial x_i \partial x_j} \vert \Psi(\theta^*(x)) \rangle.
+
+    In the equation above, the energy derivatives with respect to the nuclear coordinates :math:`x`
+    are obtained from the expectation value of Hamiltonian derivative
+
+    .. math::
+
+        \frac{\partial E({\theta}^*(x), x)}{\partial x_j} = \langle \Psi(\theta^*(x))
+        \vert \frac{\partial \hat{H}(x)}{\partial x_j} \vert \Psi(\theta^*(x)) \rangle,
+
+    and the derivative of the optimized circuit parameters :math:`\theta^*(x)` with respect
+    to :math:`x` are obtained by solving the system of linear equations,
+
+    .. math::
+
+        \sum_b \frac{\partial^2 E(\theta^*(x), x)}{\partial \theta_a \partial \theta_b}
+        \frac{\partial \theta^*_b(x)}{\partial x_i} = -\frac{\partial}{\partial \theta_a}
+        \frac{\partial E(\theta^*(x), x)}{\partial x_i}.
+
+    Args:
+        H (callable): function with signature ``H(x)`` that builds the electronic
+            Hamiltonian of the molecule for a given set of nuclear coordinates ``x``
+        x (array[float]): 1D array with the coordinates in Angstroms. The size of the
+            array should be ``3*N`` where ``N`` is the number of atoms in the molecule.
+        i (int): index of the :math:`i`-th coordinate
+        j (int): index of the :math:`j`-th coordinate
+        ansatz (callable): the ansatz for the circuit before the final measurement step
+        params (array[float]): optimized circuit parameters :math:`\theta^*(x)`
+        dev (Device): device where the calculations of the expectation values should be executed
+        hessian (array[float, float]): matrix of dimension ``params.size`` containing the Hessian
+            of the energy with respect to the circuit parameters
+            :math:`\frac{\partial^2 E(\theta^*(x), x)}{\partial \theta_a \partial \theta_b}
+        delta (float): Step size in Angstroms used to displace the nuclear coordinates 
+            Its default value corresponds to 0.01 Bohr radii.
+
+    Returns:
+        float: the derivative
+        :math:`\frac{\partial^2 E(\theta^*(x), x)}{\partial x_i \partial x_j}` of the total
+        energy
+
+    **Example**
+    
+    """
+
+    if not callable(H):
+        error_message = (
+            "{} object is not callable. \n"
+            "'H' should be a callable function to build the electronic Hamiltonian 'H(x)'".format(
+                type(H)
+            )
+        )
+        raise TypeError(error_message)
+
+    # \nabla_\theta dE/dxj
+    dE_j = qml.ExpvalCost(ansatz, derivative(x, H, j, delta=delta), dev)
+    grad_dE_j = np.array(qml.grad(dE_j)(params))
+
+    # \nabla_\theta dE/dxi
+    dE_i = qml.ExpvalCost(ansatz, derivative(x, H, i, delta=delta), dev)
+    grad_dE_i = np.array(qml.grad(dE_i)(params))
+
+    # solve linear system of equations to find 'dtheta(x)/dxi'
+    dtheta_i = np.linalg.solve(hessian, -grad_dE_i)
+
+    # compute '<d2H/dxidxj>'
+    expval_d2H_ij = qml.ExpvalCost(ansatz, second_derivative(x, H, i, j, delta=delta), dev)(params)
+
+    return np.dot(dtheta_i, grad_dE_j) + expval_d2H_ij
+
+
 __all__ = [
     "read_structure",
     "meanfield",
