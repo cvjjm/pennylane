@@ -1590,6 +1590,30 @@ class TestHashing:
 
         assert tape1.hash == tape2.hash
 
+    def test_different_numeric(self):
+        """Tests that the circuit hash of circuits are different
+        even if the parameters differ by very small amounts"""
+        a = 0.3
+        b = 0.2
+
+        with qml.tape.QuantumTape() as tape1:
+            qml.RX(a, wires=[0])
+            qml.RY(b, wires=[1])
+            qml.CNOT(wires=[0, 1])
+            qml.expval(qml.PauliZ(0) @ qml.PauliX(1))
+
+        epsilon = 1e-11
+        assert a != a + epsilon
+
+        with qml.tape.QuantumTape() as tape2:
+            qml.RX(a + epsilon, wires=[0])
+            qml.RY(b + epsilon, wires=[1])
+            qml.CNOT(wires=[0, 1])
+            qml.expval(qml.PauliZ(0) @ qml.PauliX(1))
+
+        assert tape1.hash != tape2.hash
+
+
     def test_different_wires(self):
         """Tests that the circuit hash of circuits with the same operations
         on different wires have different hashes"""
