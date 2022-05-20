@@ -144,6 +144,7 @@ def _get_operation_recipe(tape, t_idx, shifts, order=1):
     return qml.math.stack([coeffs, mults, shifts]).T
 
 
+result_cache = dict()
 def expval_param_shift(tape, argnum=None, shifts=None, gradient_recipes=None, f0=None):
     r"""Generate the parameter-shift tapes and postprocessing methods required
     to compute the gradient of a gate parameter with respect to an
@@ -170,6 +171,13 @@ def expval_param_shift(tape, argnum=None, shifts=None, gradient_recipes=None, f0
         list of generated tapes, in addition to a post-processing
         function to be applied to the results of the evaluated tapes.
     """
+    global result_cache
+    key = (tape, tuple(argnum), shifts, tuple(gradient_recipes), f0)
+    print("aeaedaedaedx", key)
+    if key in result_cache:
+        print("Have seen this tape before!")
+        return result_cache[key]
+
     argnum = argnum or tape.trainable_params
 
     gradient_tapes = []
@@ -282,6 +290,8 @@ def expval_param_shift(tape, argnum=None, shifts=None, gradient_recipes=None, f0
                     grads[i] = qml.math.hstack(g)
 
         return qml.math.T(qml.math.stack(grads))
+
+    result_cache[key] = (gradient_tapes, processing_fn)
 
     return gradient_tapes, processing_fn
 
